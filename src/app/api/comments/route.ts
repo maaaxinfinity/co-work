@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { comments } from '@/db/schema';
 import { eq, and, asc } from 'drizzle-orm';
+import type { InferInsertModel } from 'drizzle-orm';
 import { checkOrigin, jsonError } from '@/lib/server/response';
 
 export async function GET(request: NextRequest) {
@@ -79,7 +80,12 @@ export async function POST(request: NextRequest) {
     if (originBlock) return originBlock;
 
     const body = await request.json();
-    const { fileId, author, content, parentCommentId } = body;
+    const { fileId, author, content, parentCommentId } = body as {
+      fileId?: string | number;
+      author?: string;
+      content?: string;
+      parentCommentId?: string | number | null;
+    };
 
     // Validate required fields
     if (!fileId || isNaN(parseInt(fileId))) {
@@ -112,16 +118,23 @@ export async function POST(request: NextRequest) {
     }
 
     // Prepare insert data
-    const insertData: any = {
-      fileId: parseInt(fileId),
+    type CommentInsert = InferInsertModel<typeof comments>;
+    const numericFileId =
+      typeof fileId === 'string' ? parseInt(fileId, 10) : fileId;
+
+    const insertData: CommentInsert = {
+      fileId: numericFileId,
       author: author.trim(),
       content: content.trim(),
       resolved: false,
-      createdAt: new Date().toISOString(),
     };
 
     if (parentCommentId !== undefined && parentCommentId !== null) {
-      insertData.parentCommentId = parseInt(parentCommentId);
+      const numericParentId =
+        typeof parentCommentId === 'string'
+          ? parseInt(parentCommentId, 10)
+          : parentCommentId;
+      insertData.parentCommentId = numericParentId;
     }
 
     const newComment = await db.insert(comments).values(insertData).returning();
@@ -149,7 +162,10 @@ export async function PUT(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { resolved, content } = body;
+    const { resolved, content } = body as {
+      resolved?: unknown;
+      content?: unknown;
+    };
 
     // Check if comment exists
     const existingComment = await db
@@ -166,7 +182,8 @@ export async function PUT(request: NextRequest) {
     }
 
     // Prepare update data
-    const updateData: any = {};
+    type CommentUpdate = Partial<Pick<InferInsertModel<typeof comments>, 'resolved' | 'content'>>;
+    const updateData: CommentUpdate = {};
 
     if (resolved !== undefined) {
       if (typeof resolved !== 'boolean') {

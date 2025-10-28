@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { messageContextFiles } from '@/db/schema';
-import { eq, and } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { checkOrigin, jsonError } from '@/lib/server/response';
 
 export async function GET(request: NextRequest) {

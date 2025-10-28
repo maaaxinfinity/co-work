@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { files } from '@/db/schema';
 import { eq, and, isNull } from 'drizzle-orm';
+import type { InferInsertModel } from 'drizzle-orm';
 import { checkOrigin, jsonError } from '@/lib/server/response';
 
 const ALLOWED_FILE_TYPES = ['txt', 'md', 'docx', 'doc'] as const;
@@ -117,8 +118,27 @@ export async function POST(request: NextRequest) {
     const originBlock = checkOrigin(request);
     if (originBlock) return originBlock;
 
-    const body = await request.json();
-    const { projectId, name, type, ownerType, parentId, fileType, content, ownerId, status } = body;
+    const {
+      projectId,
+      name,
+      type,
+      ownerType,
+      parentId,
+      fileType,
+      content,
+      ownerId,
+      status,
+    } = (await request.json()) as {
+      projectId?: number | string;
+      name?: string;
+      type?: string;
+      ownerType?: 'team' | 'private';
+      parentId?: number | string | null;
+      fileType?: string | null;
+      content?: string | null;
+      ownerId?: number | string | null;
+      status?: string;
+    };
 
     // Validate required fields
     if (!projectId) {
@@ -129,6 +149,15 @@ export async function POST(request: NextRequest) {
     }
 
     if (isNaN(parseInt(projectId))) {
+      return NextResponse.json(
+        { error: 'Valid projectId is required', code: 'INVALID_PROJECT_ID' },
+        { status: 400 }
+      );
+    }
+
+    const numericProjectId = Number(projectId);
+
+    if (!Number.isFinite(numericProjectId)) {
       return NextResponse.json(
         { error: 'Valid projectId is required', code: 'INVALID_PROJECT_ID' },
         { status: 400 }
@@ -224,8 +253,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const now = new Date().toISOString();
-
     // When parent provided ensure it exists and remains private
     if (parsedParentId !== null) {
       const parentRecord = await db
@@ -265,14 +292,15 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const insertData: any = {
+    const timestamp = new Date();
+    const insertData: InferInsertModel<typeof files> = {
       projectId: numericProjectId,
       name: name.trim(),
       type,
       ownerType,
       status: status || 'new',
-      modifiedAt: now,
-      createdAt: now,
+      modifiedAt: timestamp,
+      createdAt: timestamp,
     };
 
     if (parsedParentId !== null) {
@@ -315,8 +343,13 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    const body = await request.json();
-    const { name, content, status, parentId, fileType } = body;
+    const { name, content, status, parentId, fileType } = (await request.json()) as {
+      name?: string;
+      content?: string | null;
+      status?: string;
+      parentId?: number | string | null;
+      fileType?: string | null;
+    };
 
     // Check if file exists
     const existingFile = await db
@@ -422,9 +455,8 @@ export async function PUT(request: NextRequest) {
       }
     }
 
-    const updates: any = {
-      updatedAt: new Date().toISOString(),
-      modifiedAt: new Date().toISOString(),
+    const updates: Partial<InferInsertModel<typeof files>> = {
+      modifiedAt: new Date(),
     };
 
     if (name !== undefined) {
@@ -432,7 +464,7 @@ export async function PUT(request: NextRequest) {
     }
 
     if (content !== undefined) {
-      updates.content = content;
+      updates.content = content ?? null;
     }
 
     if (status !== undefined) {

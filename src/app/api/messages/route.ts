@@ -48,7 +48,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    let conditions = [eq(messages.projectId, parseInt(projectId))];
+    const conditions = [eq(messages.projectId, parseInt(projectId))];
 
     // Filter by pinned status if provided
     if (pinnedParam !== null) {

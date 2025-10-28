@@ -1,11 +1,53 @@
 // API客户端 - 统一处理所有API调用
 
+import type { Region } from '@/lib/constants/access-control';
+
 const BASE_URL = '/api';
 
-interface ApiResponse<T> {
-  data?: T;
-  error?: string;
-  code?: string;
+// Auth API
+export const authApi = {
+  async register(data: { name: string; email: string; password: string; avatarUrl?: string; region?: Region }) {
+    const res = await fetch(`${BASE_URL}/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) throw await parseError(res);
+    return res.json();
+  },
+
+  async login(data: { email: string; password: string }) {
+    const res = await fetch(`${BASE_URL}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) throw await parseError(res);
+    return res.json();
+  },
+
+  async logout() {
+    const res = await fetch(`${BASE_URL}/auth/logout`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    if (!res.ok) throw await parseError(res);
+    return res.json();
+  },
+
+  async session() {
+    const res = await fetch(`${BASE_URL}/auth/session`);
+    if (!res.ok) throw await parseError(res);
+    return res.json();
+  },
+};
+
+async function parseError(res: Response) {
+  try {
+    return await res.json();
+  } catch {
+    return { error: res.statusText };
+  }
 }
 
 // Projects API

@@ -28,7 +28,7 @@ async function main() {
 
     await db.insert(versions).values(sampleVersions);
     
-    console.log('✅ Versions seeder completed successfully');
+    console.warn('✅ Versions seeder completed successfully');
 }
 
 main().catch((error) => {

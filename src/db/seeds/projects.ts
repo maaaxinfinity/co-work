@@ -13,7 +13,7 @@ async function main() {
 
     await db.insert(projects).values(sampleProjects);
     
-    console.log('✅ Projects seeder completed successfully');
+    console.warn('✅ Projects seeder completed successfully');
 }
 
 main().catch((error) => {

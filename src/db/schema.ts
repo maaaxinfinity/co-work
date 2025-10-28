@@ -1,4 +1,5 @@
 import { pgTable, serial, text, timestamp, integer, boolean } from 'drizzle-orm/pg-core';
+import { DEFAULT_REGION, DEFAULT_ROLE } from '@/lib/constants/access-control';
 
 // Projects table - 项目管理
 export const projects = pgTable('projects', {
@@ -13,8 +14,14 @@ export const projects = pgTable('projects', {
 export const users = pgTable('users', {
   id: serial('id').primaryKey(),
   name: text('name').notNull(),
+  role: text('role').notNull().default(DEFAULT_ROLE),
+  region: text('region').notNull().default(DEFAULT_REGION),
+  email: text('email').notNull().unique(),
+  passwordHash: text('password_hash').notNull(),
   avatarUrl: text('avatar_url'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  lastLoginAt: timestamp('last_login_at'),
 });
 
 // Project Members table - 项目成员关系
@@ -23,6 +30,15 @@ export const projectMembers = pgTable('project_members', {
   projectId: integer('project_id').notNull().references(() => projects.id),
   userId: integer('user_id').notNull().references(() => users.id),
   role: text('role').notNull().default('viewer'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+});
+
+// Sessions table - 用户登录会话
+export const sessions = pgTable('sessions', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').notNull().references(() => users.id),
+  token: text('token').notNull().unique(),
+  expiresAt: timestamp('expires_at').notNull(),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 });
 

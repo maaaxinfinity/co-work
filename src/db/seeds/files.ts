@@ -147,7 +147,7 @@ async function main() {
         },
     ]);
 
-    console.log('✅ Files seeder completed successfully');
+    console.warn('✅ Files seeder completed successfully');
 }
 
 main().catch((error) => {

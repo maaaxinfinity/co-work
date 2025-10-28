@@ -2,7 +2,7 @@
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { filesApi, messagesApi, projectsApi } from "@/lib/api-client";
+import { filesApi, messagesApi } from "@/lib/api-client";
 
 export type FileKind = "file" | "folder";
 export type FileType = "docx" | "doc" | "md" | "txt" | "code" | "image";
@@ -63,8 +63,23 @@ interface WorkspaceContextValue {
 
 const WorkspaceContext = createContext<WorkspaceContextValue | null>(null);
 
+type FileRecord = {
+  id: number;
+  name: string;
+  type: FileKind;
+  modifiedAt?: string | null;
+  status?: "modified" | "new" | "synced" | null;
+  fileType?: string | null;
+  content?: string | null;
+  parentId: number | null;
+  projectId: number;
+  ownerType: "team" | "private";
+  ownerId?: number | null;
+  children?: FileRecord[];
+};
+
 // 构建文件树结构
-function buildFileTree(files: any[]): WorkspaceFile[] {
+function buildFileTree(files: FileRecord[]): WorkspaceFile[] {
   const fileMap = new Map<number, WorkspaceFile>();
   const rootFiles: WorkspaceFile[] = [];
 
@@ -73,10 +88,10 @@ function buildFileTree(files: any[]): WorkspaceFile[] {
     fileMap.set(file.id, {
       id: file.id,
       name: file.name,
-      type: file.type as FileKind,
+      type: file.type,
       modifiedAt: file.modifiedAt,
-      status: file.status as "modified" | "new" | "synced",
-      fileType: file.fileType as FileType | undefined,
+      status: file.status ?? "synced",
+      fileType: (file.fileType as FileType | undefined) ?? undefined,
       content: file.content,
       parentId: file.parentId,
       projectId: file.projectId,
@@ -121,8 +136,8 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   const loadFiles = useCallback(async () => {
     try {
       const [teamFilesData, privateFilesData] = await Promise.all([
-        filesApi.getAll({ projectId: PROJECT_ID, ownerType: "team" }),
-        filesApi.getAll({ projectId: PROJECT_ID, ownerType: "private" }),
+        filesApi.getAll({ projectId: PROJECT_ID, ownerType: "team" }) as Promise<FileRecord[]>,
+        filesApi.getAll({ projectId: PROJECT_ID, ownerType: "private" }) as Promise<FileRecord[]>,
       ]);
 
       const teamTree = buildFileTree(teamFilesData);
@@ -144,14 +159,14 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   // 加载消息
   const loadMessages = useCallback(async () => {
     try {
-      const messagesData = await messagesApi.getAll({
+      const messagesData = (await messagesApi.getAll({
         projectId: PROJECT_ID,
         limit: 100,
-      });
+      })) as Message[];
 
       setState((prev) => ({
         ...prev,
-        messages: messagesData.map((msg: any) => ({
+        messages: messagesData.map((msg) => ({
           id: msg.id,
           role: msg.role,
           content: msg.content,

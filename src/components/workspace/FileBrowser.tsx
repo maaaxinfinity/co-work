@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   ChevronRight,
   ChevronDown,
@@ -51,9 +51,9 @@ export default function FileBrowser() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [ctxNode, setCtxNode] = useState<WorkspaceFile | null>(null);
   const [propsOpen, setPropsOpen] = useState(false);
-  const [blankMenuOwner, setBlankMenuOwner] = useState<"team" | "private" | null>(null);
+  const [, setBlankMenuOwner] = useState<"team" | "private" | null>(null);
   const [dragActive, setDragActive] = useState(false);
-  const [dragDepth, setDragDepth] = useState(0);
+  const [, setDragDepth] = useState(0);
 
   const teamFiles = state.teamFiles;
   const privateFiles = state.privateFiles;
@@ -61,7 +61,11 @@ export default function FileBrowser() {
 
   const toggleFolder = (id: number) => {
     const s = new Set(expandedFolders);
-    s.has(id) ? s.delete(id) : s.add(id);
+    if (s.has(id)) {
+      s.delete(id);
+    } else {
+      s.add(id);
+    }
     setExpandedFolders(s);
   };
 
@@ -163,52 +167,53 @@ export default function FileBrowser() {
     return filtered;
   };
 
-  // 自动展开包含搜索结果的文件夹
-  const autoExpandMatchingFolders = (nodes: WorkspaceFile[], query: string) => {
-    if (!query.trim()) return;
-    
-    const lowerQuery = query.toLowerCase();
-    const foldersToExpand = new Set(expandedFolders);
-    
-    const checkAndExpand = (node: WorkspaceFile): boolean => {
-      let hasMatch = false;
-      
-      if (node.name.toLowerCase().includes(lowerQuery)) {
-        hasMatch = true;
-      }
-      
-      if (node.type === "folder" && node.children) {
-        for (const child of node.children) {
-          if (checkAndExpand(child)) {
-            hasMatch = true;
-            foldersToExpand.add(node.id);
-          }
-        }
-      }
-      
-      return hasMatch;
-    };
-    
-    nodes.forEach(node => checkAndExpand(node));
-    setExpandedFolders(foldersToExpand);
-  };
-
   // 应用搜索过滤
   const filteredTeamFiles = useMemo(() => {
-    const filtered = filterFiles(teamFiles, searchQuery);
-    if (searchQuery.trim()) {
-      autoExpandMatchingFolders(teamFiles, searchQuery);
-    }
-    return filtered;
+    return filterFiles(teamFiles, searchQuery);
   }, [teamFiles, searchQuery]);
 
   const filteredPrivateFiles = useMemo(() => {
-    const filtered = filterFiles(privateFiles, searchQuery);
-    if (searchQuery.trim()) {
-      autoExpandMatchingFolders(privateFiles, searchQuery);
-    }
-    return filtered;
+    return filterFiles(privateFiles, searchQuery);
   }, [privateFiles, searchQuery]);
+
+  useEffect(() => {
+    if (!searchQuery.trim()) return;
+
+    const lowerQuery = searchQuery.toLowerCase();
+
+    const expandMatchingFolders = (nodes: WorkspaceFile[], accumulator: Set<number>): boolean => {
+      let hasAnyMatch = false;
+
+      nodes.forEach((node) => {
+        const nameMatches = node.name.toLowerCase().includes(lowerQuery);
+        let childMatches = false;
+
+        if (node.type === "folder" && node.children) {
+          childMatches = expandMatchingFolders(node.children, accumulator);
+        }
+
+        const nodeMatches = nameMatches || childMatches;
+        if (nodeMatches && node.type === "folder") {
+          accumulator.add(node.id);
+        }
+
+        if (nodeMatches) {
+          hasAnyMatch = true;
+        }
+      });
+
+      return hasAnyMatch;
+    };
+
+    setExpandedFolders((prev) => {
+      const next = new Set(prev);
+      const beforeSize = next.size;
+      expandMatchingFolders(teamFiles, next);
+      expandMatchingFolders(privateFiles, next);
+      if (next.size === beforeSize) return prev;
+      return next;
+    });
+  }, [searchQuery, teamFiles, privateFiles]);
 
   // 高亮搜索文本
   const highlightText = (text: string, query: string) => {
@@ -633,7 +638,27 @@ function handleDownload(node: WorkspaceFile) {
     return;
   }
   try {
-    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+    const extension =
+      node.fileType ||
+      name.split('.').pop()?.toLowerCase() ||
+      'txt';
+
+    let blob: Blob;
+    if (extension === 'docx' || extension === 'doc') {
+      const binary = base64ToUint8Array(content);
+      const mime =
+        extension === 'docx'
+          ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+          : 'application/msword';
+      blob = new Blob([binary], { type: mime });
+    } else {
+      const mime =
+        extension === 'md'
+          ? 'text/markdown;charset=utf-8'
+          : 'text/plain;charset=utf-8';
+      blob = new Blob([content], { type: mime });
+    }
+
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -647,4 +672,20 @@ function handleDownload(node: WorkspaceFile) {
     console.error(e);
     toast.error('下载失败');
   }
+}
+
+function base64ToUint8Array(input: string): Uint8Array {
+  const normalized = input.replace(/\s/g, '');
+  if (typeof globalThis.atob !== 'function') {
+    throw new Error('当前环境不支持 base64 解码');
+  }
+  const binaryString = globalThis.atob(normalized);
+  const length = binaryString.length;
+  const bytes = new Uint8Array(length);
+
+  for (let i = 0; i < length; i += 1) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+
+  return bytes;
 }

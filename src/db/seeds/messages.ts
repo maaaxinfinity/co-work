@@ -55,7 +55,7 @@ async function main() {
 
     await db.insert(messages).values(sampleMessages);
     
-    console.log('✅ Messages seeder completed successfully');
+    console.warn('✅ Messages seeder completed successfully');
 }
 
 main().catch((error) => {

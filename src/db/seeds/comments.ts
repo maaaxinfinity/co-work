@@ -46,7 +46,7 @@ async function main() {
 
     await db.insert(comments).values(replyComments);
 
-    console.log('✅ Comments seeder completed successfully');
+    console.warn('✅ Comments seeder completed successfully');
 }
 
 main().catch((error) => {

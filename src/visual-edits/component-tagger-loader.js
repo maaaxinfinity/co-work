@@ -1,5 +1,6 @@
 
 "use strict";
+/* eslint-disable @typescript-eslint/no-require-imports */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.default = componentTagger;
 const parser_1 = require("@babel/parser");
@@ -427,18 +428,20 @@ function componentTagger(src, map) {
                     orchidsId += `@${mapContext.arrayName}`;
                 }
                 // 🔍 Append referenced variable locations for simple identifier references in props
-                (_a = node.attributes) === null || _a === void 0 ? void 0 : _a.forEach((attr) => {
-                    var _a, _b;
-                    if (attr.type === 'JSXAttribute' &&
-                        ((_a = attr.value) === null || _a === void 0 ? void 0 : _a.type) === 'JSXExpressionContainer' &&
-                        ((_b = attr.value.expression) === null || _b === void 0 ? void 0 : _b.type) === 'Identifier') {
-                        const refName = attr.value.expression.name;
-                        const varInfo = variables.get(refName);
-                        if (varInfo) {
-                            orchidsId += `@${refName}`;
+                if (node.attributes) {
+                    node.attributes.forEach((attr) => {
+                        var _a, _b;
+                        if (attr.type === 'JSXAttribute' &&
+                            ((_a = attr.value) === null || _a === void 0 ? void 0 : _a.type) === 'JSXExpressionContainer' &&
+                            ((_b = attr.value.expression) === null || _b === void 0 ? void 0 : _b.type) === 'Identifier') {
+                            const refName = attr.value.expression.name;
+                            const varInfo = variables.get(refName);
+                            if (varInfo) {
+                                orchidsId += `@${refName}`;
+                            }
                         }
-                    }
-                });
+                    });
+                }
                 // 📍 If inside a map context and we have an index variable, inject data-map-index
                 if (mapContext === null || mapContext === void 0 ? void 0 : mapContext.indexVarName) {
                     ms.appendLeft(node.name.end, ` data-map-index={${mapContext.indexVarName}}`);

@@ -10,7 +10,7 @@ import { WorkspaceProvider } from "@/hooks/useWorkspaceStore";
 export default function WorkspaceLayout() {
   return (
     <WorkspaceProvider>
-      <div className="h-screen w-screen flex flex-col overflow-hidden bg-background">
+      <div className="flex h-full min-h-[calc(100vh-4rem)] w-full flex-col overflow-hidden bg-background">
         {/* Top Navigation */}
         <TopNavBar />
 

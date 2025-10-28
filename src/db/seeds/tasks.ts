@@ -42,7 +42,7 @@ async function main() {
 
     await db.insert(tasks).values(sampleTasks);
     
-    console.log('✅ Tasks seeder completed successfully');
+    console.warn('✅ Tasks seeder completed successfully');
 }
 
 main().catch((error) => {

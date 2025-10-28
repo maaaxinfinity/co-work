@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { useWorkspace } from "@/hooks/useWorkspaceStore";
+import type { WorkspaceFile } from "@/hooks/useWorkspaceStore";
 import { toast } from "sonner";
 import ReactMarkdown from "react-markdown";
 
@@ -57,18 +58,20 @@ export default function ChatPanel() {
 
   // 获取文件名
   // Efficient file name lookup using a memoized Map index
+  const { teamFiles, privateFiles } = state;
+
   const fileNameById = useMemo(() => {
     const map = new Map<number, string>();
-    const index = (files: typeof state.teamFiles) => {
+    const index = (files: WorkspaceFile[]) => {
       files.forEach((f) => {
         map.set(f.id, f.name);
         if (f.children) index(f.children);
       });
     };
-    index(state.teamFiles);
-    index(state.privateFiles);
+    index(teamFiles);
+    index(privateFiles);
     return map;
-  }, [state.teamFiles, state.privateFiles]);
+  }, [teamFiles, privateFiles]);
 
   const getFileName = (fileId: number) => fileNameById.get(fileId) || "未知文件";
 
@@ -155,7 +158,7 @@ export default function ChatPanel() {
                   <div className="prose prose-sm dark:prose-invert max-w-none">
                     <ReactMarkdown
                       components={{
-                        a: ({ node, ...props }) => (
+                        a: ({ node: _node, ...props }) => (
                           <a {...props} target="_blank" rel="noopener noreferrer" />
                         ),
                       }}

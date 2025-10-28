@@ -17,7 +17,7 @@ async function main() {
 
     await db.insert(messageContextFiles).values(sampleMessageContextFiles);
     
-    console.log('✅ Message context files seeder completed successfully');
+    console.warn('✅ Message context files seeder completed successfully');
 }
 
 main().catch((error) => {

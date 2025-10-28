@@ -1,9 +1,7 @@
 "use client";
 
-import { useState, useRef, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
-  Download,
-  Upload,
   FileText,
   MessageSquare,
   Clock,
@@ -24,12 +22,6 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import {
   Dialog,
   DialogContent,
@@ -167,29 +159,32 @@ export default function EditorArea({ currentFile }: EditorAreaProps) {
       return { name: selected.name || "未命名", content: selected.content };
     }
     if (currentFile) return currentFile;
-    return { name: "未命名.docx", content: undefined };
+    return null;
   }, [selected, currentFile]);
 
-  const getEditorType = () => {
-    const fileName = (activeFile?.name || "").toLowerCase();
-    if (fileName.endsWith(".md") || fileName.endsWith(".markdown")) {
-      return "markdown";
-    } else if (fileName.endsWith(".docx") || fileName.endsWith(".doc")) {
-      return "docx";
-    } else if (fileName.endsWith(".txt") || fileName.endsWith(".text")) {
-      return "text";
-    }
-    return "docx";
-  };
+  const showPlaceholder = !activeFile;
 
-  const editorType = getEditorType();
+  const editorType = useMemo(() => {
+    if (!activeFile) return null;
+    const fileName = (activeFile.name || "").toLowerCase();
+    if (fileName.endsWith(".md") || fileName.endsWith(".markdown")) {
+      return "markdown" as const;
+    }
+    if (fileName.endsWith(".docx") || fileName.endsWith(".doc")) {
+      return "docx" as const;
+    }
+    if (fileName.endsWith(".txt") || fileName.endsWith(".text")) {
+      return "text" as const;
+    }
+    return "docx" as const;
+  }, [activeFile]);
 
   const handleWordCountUpdate = (count: number) => {
     setWordCount(count);
   };
 
   const handleContentChange = (content: string) => {
-    if (isReadOnly) return;
+    if (isReadOnly || !selected?.id) return;
     setIsDirty(true);
     setDraftContent(content);
     // In a more advanced setup, we would keep per-file local draft state here
@@ -203,10 +198,9 @@ export default function EditorArea({ currentFile }: EditorAreaProps) {
 
   // Auto-save every 5s if there are unsaved changes
   useEffect(() => {
-    if (isReadOnly) return;
+    if (isReadOnly || !selected?.id) return;
     const id = window.setInterval(async () => {
       if (!isDirty) return;
-      if (!selected?.id) return;
       try {
         await actions.updateFileContent(selected.id, draftContent);
         setIsDirty(false);
@@ -217,6 +211,16 @@ export default function EditorArea({ currentFile }: EditorAreaProps) {
     }, 5000);
     return () => window.clearInterval(id);
   }, [isDirty, selected?.id, draftContent, actions, isReadOnly]);
+
+  const handleCreatePrivateDoc = async () => {
+    await actions.addFile(null, {
+      name: "新建文档.md",
+      type: "file",
+      fileType: "md",
+      content: "# 新建文档\n\n开始记录你的想法。",
+      ownerType: "private",
+    });
+  };
 
   // 大纲点击滚动
   const handleOutlineClick = (item: OutlineItem) => {
@@ -335,45 +339,71 @@ export default function EditorArea({ currentFile }: EditorAreaProps) {
     <div className="flex flex-col h-full bg-background">
       {/* 编辑器 + 侧边栏 */}
       <div className="flex-1 flex overflow-hidden bg-muted/20">
-        {/* 编辑器容器 */}
-        <div className="flex-1 overflow-hidden flex flex-col relative">
-          {isReadOnly && (
-            <div className="absolute top-3 left-3 z-20">
-              <Badge variant="secondary" className="gap-1 text-xs">
-                <Lock className="w-3 h-3" />
-                团队文件（只读）
-              </Badge>
+        {showPlaceholder ? (
+          <div className="flex-1 flex items-center justify-center bg-background p-10">
+            <div className="text-center space-y-6 max-w-sm">
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-primary">
+                <FileText className="w-7 h-7 animate-pulse" />
+              </div>
+              <div className="space-y-2">
+                <h2 className="text-lg font-semibold">选择或新建一个文件</h2>
+                <p className="text-sm text-muted-foreground">
+                  在左侧文件面板中选择团队文件进行只读查看，或在私有文件中新建文档开始协作。
+                </p>
+              </div>
+              <div className="flex items-center justify-center gap-2">
+                <Button onClick={handleCreatePrivateDoc}>新建私有文档</Button>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    void actions.refreshFiles();
+                  }}
+                >
+                  刷新列表
+                </Button>
+              </div>
             </div>
-          )}
-          {editorType === "docx" && (
-            <DocxEditor
-              onWordCountUpdate={handleWordCountUpdate}
-              onPageCountUpdate={setPageCount}
-              zoom={zoom}
-              readOnly={isReadOnly}
-            />
-          )}
-          {editorType === "markdown" && (
-            <MarkdownEditor
-              onWordCountUpdate={handleWordCountUpdate}
-              initialContent={activeFile?.content}
-              onChange={handleContentChange}
-              readOnly={isReadOnly}
-            />
-          )}
-          {editorType === "text" && (
-            <TextEditor
-              onWordCountUpdate={handleWordCountUpdate}
-              initialContent={activeFile?.content}
-              onChange={handleContentChange}
-              readOnly={isReadOnly}
-            />
-          )}
-        </div>
+          </div>
+        ) : (
+          <div className="relative flex flex-1 overflow-hidden">
+            <div className="relative flex flex-1 flex-col overflow-hidden">
+              {isReadOnly && (
+                <div className="absolute top-3 left-3 z-20">
+                  <Badge variant="secondary" className="gap-1 text-xs">
+                    <Lock className="w-3 h-3" />
+                    团队文件（只读）
+                  </Badge>
+                </div>
+              )}
+              {editorType === "docx" && (
+                <DocxEditor
+                  onWordCountUpdate={handleWordCountUpdate}
+                  onPageCountUpdate={setPageCount}
+                  zoom={zoom}
+                  readOnly={isReadOnly}
+                />
+              )}
+              {editorType === "markdown" && (
+                <MarkdownEditor
+                  onWordCountUpdate={handleWordCountUpdate}
+                  initialContent={activeFile?.content}
+                  onChange={handleContentChange}
+                  readOnly={isReadOnly}
+                />
+              )}
+              {editorType === "text" && (
+                <TextEditor
+                  onWordCountUpdate={handleWordCountUpdate}
+                  initialContent={activeFile?.content}
+                  onChange={handleContentChange}
+                  readOnly={isReadOnly}
+                />
+              )}
+            </div>
 
-        {/* 右侧边栏 */}
-        {sidebarOpen && (
-          <div className="w-80 border-l border-border bg-background flex flex-col">
+            {/* 右侧边栏 */}
+            {sidebarOpen && (
+              <div className="flex w-80 flex-col border-l border-border bg-background">
             <div className="flex items-center justify-between p-2 border-b border-border">
               <h3 className="text-sm font-semibold px-2">侧边栏</h3>
               <Button
@@ -632,6 +662,8 @@ export default function EditorArea({ currentFile }: EditorAreaProps) {
             </Button>
           </div>
         )}
+          </div>
+        )}
       </div>
 
       {/* 添加评论对话框 */}
@@ -686,11 +718,16 @@ export default function EditorArea({ currentFile }: EditorAreaProps) {
           {isDirty ? '有未保存更改' : (lastSavedAt ? `已保存于 ${lastSavedAt}` : '已保存')}
         </span>
         <div className="flex items-center gap-2 ml-auto">
-          <span className="text-muted-foreground">编辑器: {
-            editorType === "docx" ? "DOCX" : 
-            editorType === "markdown" ? "Markdown" : 
-            "文本"
-          }</span>
+          <span className="text-muted-foreground">
+            编辑器:{" "}
+            {editorType === "docx"
+              ? "DOCX"
+              : editorType === "markdown"
+                ? "Markdown"
+                : editorType === "text"
+                  ? "文本"
+                  : "等待选择"}
+          </span>
           <Separator orientation="vertical" className="h-4" />
           <Button
             variant="ghost"

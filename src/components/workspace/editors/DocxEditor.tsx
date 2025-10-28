@@ -16,7 +16,7 @@ import {
   AlignJustify,
   List,
   ListOrdered,
-  Image,
+  Image as ImageIcon,
   Link,
   Table,
   Type,
@@ -32,16 +32,13 @@ import {
   ChevronDown,
   MoreHorizontal,
   Paintbrush,
-  Minus,
   FileCode,
   Calendar,
   CheckSquare,
   Indent,
   Outdent,
   Code,
-  SquareCode,
   Droplets,
-  MessageSquare,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -56,9 +53,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
   DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubTrigger,
-  DropdownMenuSubContent,
 } from "@/components/ui/dropdown-menu";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
@@ -78,6 +72,50 @@ interface DocxEditorProps {
   readOnly?: boolean;
 }
 
+type CanvasEditorElement = {
+  type: string;
+  value?: string;
+  width?: number;
+  height?: number;
+};
+
+type CanvasEditorRange = {
+  startIndex: number;
+  endIndex: number;
+};
+
+interface CanvasEditorCommand extends Record<string, unknown> {
+  executePageScale(scale: number): void;
+  executeExportDocx(): void;
+  executeImportDocx(buffer: ArrayBuffer): void;
+  executePrint(): void;
+  executeInsertElementList(elements: CanvasEditorElement[]): void;
+  executeHyperlink(payload: { type: string; url: string }): void;
+  executeInsertTable(payload: { row: number; col: number }): void;
+  executeSearch(): void;
+  executePainter(): void;
+  executeIncreaseIndent(): void;
+  executeDecreaseIndent(): void;
+  executeWatermark(payload: { data: string; color: string; size: number; opacity: number }): void;
+  getValue(): { data: { main: Array<{ value?: string }> } };
+  getPageNo?: () => Array<unknown>;
+}
+
+interface CanvasEditorRangeManager {
+  getRange(): CanvasEditorRange | null;
+}
+
+interface CanvasEditorInstance {
+  getCommand(): CanvasEditorCommand;
+  getRange(): CanvasEditorRangeManager;
+  destroy?: () => void;
+}
+
+type CanvasEditorConstructor = new (
+  container: HTMLElement,
+  initialData?: unknown[]
+) => CanvasEditorInstance;
+
 export default function DocxEditor({
   onWordCountUpdate,
   onPageCountUpdate,
@@ -85,7 +123,7 @@ export default function DocxEditor({
   readOnly = false,
 }: DocxEditorProps) {
   const editorContainerRef = useRef<HTMLDivElement>(null);
-  const editorInstanceRef = useRef<any>(null);
+  const editorInstanceRef = useRef<CanvasEditorInstance | null>(null);
   const intervalIdRef = useRef<number | null>(null);
   const [currentFontSize, setCurrentFontSize] = useState(16);
   const [currentFontFamily, setCurrentFontFamily] = useState("微软雅黑");
@@ -102,7 +140,7 @@ export default function DocxEditor({
       if (typeof window === "undefined" || !editorContainerRef.current) return;
 
       try {
-        const Editor = (await import("@hufe921/canvas-editor")).default;
+        const Editor = (await import("@hufe921/canvas-editor")).default as CanvasEditorConstructor;
 
         const instance = new Editor(
           editorContainerRef.current,
@@ -285,23 +323,24 @@ export default function DocxEditor({
           try {
             const command = instance.getCommand();
             const value = command.getValue();
-            const text = value.data.main
-              .map((item: any) => item.value || "")
+            const mainContent = value.data.main as Array<{ value?: string }>;
+            const text = mainContent
+              .map((item) => item.value ?? "")
               .join("");
             if (onWordCountUpdate) {
               onWordCountUpdate(text.length);
             }
             if (onPageCountUpdate) {
               try {
-                const pageNo = command.getPageNo();
-                if (pageNo) {
+                const pageNo = command.getPageNo?.();
+                if (Array.isArray(pageNo)) {
                   onPageCountUpdate(pageNo.length || 1);
                 }
-              } catch (err) {
+              } catch {
                 // ignore
               }
             }
-          } catch (error) {
+          } catch {
             // ignore update errors
           }
         };
@@ -337,14 +376,14 @@ export default function DocxEditor({
         const command = editorInstanceRef.current.getCommand();
         const scale = zoom / 100;
         command.executePageScale(scale);
-      } catch (error) {
+      } catch {
         // ignore
       }
     }
   }, [zoom]);
 
   // 执行命令的通用方法
-  const executeCommand = (commandName: string, payload?: any) => {
+  const executeCommand = (commandName: string, payload?: unknown) => {
     if (!editorInstanceRef.current) {
       toast.error("编辑器未初始化");
       return;
@@ -352,8 +391,9 @@ export default function DocxEditor({
     try {
       const command = editorInstanceRef.current.getCommand();
       const methodName = `execute${commandName.charAt(0).toUpperCase() + commandName.slice(1)}`;
-      if (typeof command[methodName] === "function") {
-        command[methodName](payload);
+      const handler = command[methodName];
+      if (typeof handler === "function") {
+        (handler as (value?: unknown) => unknown)(payload);
         toast.success(`执行${commandName}成功`);
       } else {
         console.warn(`Command ${methodName} not found`);
@@ -382,8 +422,9 @@ export default function DocxEditor({
     const input = document.createElement("input");
     input.type = "file";
     input.accept = ".docx";
-    input.onchange = async (e) => {
-      const file = (e.target as HTMLInputElement).files?.[0];
+    input.onchange = async (event) => {
+      const target = event.target as HTMLInputElement | null;
+      const file = target?.files?.[0];
       if (file && editorInstanceRef.current) {
         try {
           const arrayBuffer = await file.arrayBuffer();
@@ -417,22 +458,28 @@ export default function DocxEditor({
     const input = document.createElement("input");
     input.type = "file";
     input.accept = "image/*";
-    input.onchange = async (e) => {
-      const file = (e.target as HTMLInputElement).files?.[0];
+    input.onchange = async (event) => {
+      const target = event.target as HTMLInputElement | null;
+      const file = target?.files?.[0];
       if (file && editorInstanceRef.current) {
         try {
           const reader = new FileReader();
-          reader.onload = (event) => {
-            const command = editorInstanceRef.current.getCommand();
-            command.executeInsertElementList([
-              {
-                type: "image",
-                value: event.target?.result as string,
-                width: 200,
-                height: 200,
-              },
-            ]);
-            toast.success("图片插入成功");
+          reader.onload = (loadEvent: ProgressEvent<FileReader>) => {
+            const result = loadEvent.target?.result;
+            if (typeof result === "string") {
+              const command = editorInstanceRef.current?.getCommand();
+              command?.executeInsertElementList([
+                {
+                  type: "image",
+                  value: result,
+                  width: 200,
+                  height: 200,
+                },
+              ]);
+              toast.success("图片插入成功");
+            } else {
+              toast.error("不支持的图片格式");
+            }
           };
           reader.readAsDataURL(file);
         } catch (error) {
@@ -454,7 +501,7 @@ export default function DocxEditor({
         return;
       }
       setLinkDialogOpen(true);
-    } catch (e) {
+    } catch {
       toast.error("无法打开链接对话框");
     }
   };
@@ -469,7 +516,7 @@ export default function DocxEditor({
       });
       toast.success("链接添加成功");
       setLinkDialogOpen(false);
-    } catch (e) {
+    } catch {
       toast.error("添加链接失败");
     }
   };
@@ -1113,7 +1160,7 @@ export default function DocxEditor({
                     className="h-8 w-8"
                     onClick={handleInsertImage}
                   >
-                    <Image className="w-4 h-4" />
+                    <ImageIcon className="w-4 h-4" />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>插入图片</TooltipContent>

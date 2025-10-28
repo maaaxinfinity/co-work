@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 
 export const CHANNEL = "ORCHIDS_HOVER_v1" as const;
 const VISUAL_EDIT_MODE_KEY = "orchids_visual_edit_mode" as const;
@@ -145,6 +145,37 @@ export type ChildToParent =
 type Box = null | { top: number; left: number; width: number; height: number };
 
 const BOX_PADDING = 4; // Pixels to expand the box on each side
+
+const expandBox = (rect: DOMRect): Box => ({
+  top: rect.top - BOX_PADDING,
+  left: rect.left - BOX_PADDING,
+  width: rect.width + BOX_PADDING * 2,
+  height: rect.height + BOX_PADDING * 2,
+});
+
+const protectChildElements = (element: HTMLElement) => {
+  const childElements = element.querySelectorAll("*");
+  childElements.forEach((child) => {
+    const childEl = child as HTMLElement;
+    childEl.contentEditable = "false";
+    childEl.setAttribute("data-orchids-protected", "true");
+    childEl.style.userSelect = "none";
+    childEl.style.webkitUserSelect = "none";
+  });
+};
+
+const restoreChildElements = (element: HTMLElement) => {
+  const protectedElements = element.querySelectorAll(
+    '[data-orchids-protected="true"]'
+  );
+  protectedElements.forEach((child) => {
+    const childEl = child as HTMLElement;
+    childEl.removeAttribute("contenteditable");
+    childEl.removeAttribute("data-orchids-protected");
+    childEl.style.userSelect = "";
+    childEl.style.webkitUserSelect = "";
+  });
+};
 
 // Helper to check if element can be made contentEditable
 const isTextEditable = (element: HTMLElement): boolean => {
@@ -462,67 +493,62 @@ export default function HoverReceiver() {
 
   // On mount, notify parent if visual edit mode was restored from localStorage
   useEffect(() => {
-    if (isVisualEditMode) {
-      // Send acknowledgement to parent that visual edit mode is active
-      // This will sync the parent's state with our restored state
-      window.parent.postMessage(
-        { type: CHANNEL, msg: "VISUAL_EDIT_MODE_ACK", active: true },
-        "*"
-      );
-
-      // Also send a special message to indicate this was restored from localStorage
-      window.parent.postMessage(
-        { type: CHANNEL, msg: "VISUAL_EDIT_MODE_RESTORED", active: true },
-        "*"
-      );
-
-      // Restore focused element after a short delay to ensure DOM is ready
-      setTimeout(() => {
-        if (typeof window !== "undefined") {
-          // Restore focused element
-          const focusedData = localStorage.getItem(FOCUSED_ELEMENT_KEY);
-          if (focusedData) {
-            try {
-              const { id } = JSON.parse(focusedData);
-              const element = document.querySelector(
-                `[data-orchids-id="${id}"]`
-              ) as HTMLElement;
-
-              if (element) {
-                // Simulate a click on the element to restore focus
-                const rect = element.getBoundingClientRect();
-                const clickEvent = new MouseEvent("click", {
-                  clientX: rect.left + rect.width / 2,
-                  clientY: rect.top + rect.height / 2,
-                  bubbles: true,
-                  cancelable: true,
-                });
-                element.dispatchEvent(clickEvent);
-              }
-            } catch {
-              // Ignore parsing errors
-            }
-          }
-        }
-      }, 500); // Wait 500ms for DOM to be fully ready
+    if (typeof window === "undefined" || !isVisualEditMode) {
+      return;
     }
-  }, []); // Run only on mount
 
-  // Helper function to expand box dimensions
-  const expandBox = (rect: DOMRect): Box => ({
-    top: rect.top - BOX_PADDING,
-    left: rect.left - BOX_PADDING,
-    width: rect.width + BOX_PADDING * 2,
-    height: rect.height + BOX_PADDING * 2,
-  });
+    // Send acknowledgement to parent that visual edit mode is active
+    // This will sync the parent's state with our restored state
+    window.parent.postMessage(
+      { type: CHANNEL, msg: "VISUAL_EDIT_MODE_ACK", active: true },
+      "*"
+    );
+
+    // Also send a special message to indicate this was restored from localStorage
+    window.parent.postMessage(
+      { type: CHANNEL, msg: "VISUAL_EDIT_MODE_RESTORED", active: true },
+      "*"
+    );
+
+    // Restore focused element after a short delay to ensure DOM is ready
+    const timer = window.setTimeout(() => {
+      const focusedData = localStorage.getItem(FOCUSED_ELEMENT_KEY);
+      if (focusedData) {
+        try {
+          const { id } = JSON.parse(focusedData);
+          const element = document.querySelector(
+            `[data-orchids-id="${id}"]`
+          ) as HTMLElement | null;
+
+          if (element) {
+            // Simulate a click on the element to restore focus
+            const rect = element.getBoundingClientRect();
+            const clickEvent = new MouseEvent("click", {
+              clientX: rect.left + rect.width / 2,
+              clientY: rect.top + rect.height / 2,
+              bubbles: true,
+              cancelable: true,
+            });
+            element.dispatchEvent(clickEvent);
+          }
+        } catch {
+          // Ignore parsing errors
+        }
+      }
+    }, 500);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [isVisualEditMode]);
 
   // Helper to update focus box position
-  const updateFocusBox = () => {
+  const updateFocusBox = useCallback(() => {
     if (focusedElementRef.current) {
-      const r = focusedElementRef.current.getBoundingClientRect();
-      setFocusBox(expandBox(r));
+      const rect = focusedElementRef.current.getBoundingClientRect();
+      setFocusBox(expandBox(rect));
     }
-  };
+  }, []);
 
   // Add global styles for contentEditable elements
   useEffect(() => {
@@ -576,40 +602,8 @@ export default function HoverReceiver() {
     };
   }, [isVisualEditMode]);
 
-  // Helper to make only text nodes editable and protect child elements
-  const protectChildElements = (element: HTMLElement) => {
-    // Make all child elements non-editable
-    const childElements = element.querySelectorAll("*");
-    childElements.forEach((child) => {
-      const childEl = child as HTMLElement;
-      childEl.contentEditable = "false";
-      // Add a data attribute to mark protected elements
-      childEl.setAttribute("data-orchids-protected", "true");
-      // Only prevent text selection within the child elements when parent is being edited
-      // But still allow pointer events for hovering and clicking
-      childEl.style.userSelect = "none";
-      childEl.style.webkitUserSelect = "none";
-      // Don't set pointerEvents to none - we want to allow hover and click
-    });
-  };
-
-  // Helper to restore child elements after editing
-  const restoreChildElements = (element: HTMLElement) => {
-    const protectedElements = element.querySelectorAll(
-      '[data-orchids-protected="true"]'
-    );
-    protectedElements.forEach((child) => {
-      const childEl = child as HTMLElement;
-      childEl.removeAttribute("contenteditable");
-      childEl.removeAttribute("data-orchids-protected");
-      // Restore original styles
-      childEl.style.userSelect = "";
-      childEl.style.webkitUserSelect = "";
-    });
-  };
-
   // Handle text changes and send to parent
-  const handleTextChange = (element: HTMLElement) => {
+  const handleTextChange = useCallback((element: HTMLElement) => {
     // Double-check this is still the editing element to avoid stale closures
     if (element !== editingElementRef.current) {
       console.warn("Attempting to handle text change for non-editing element");
@@ -657,15 +651,13 @@ export default function HoverReceiver() {
       // Update the original content reference
       originalContentRef.current = newText;
     }
-  };
+  }, []);
 
   // Handle style changes and send to parent
-  const handleStyleChange = (
-    element: HTMLElement,
-    styles: Record<string, string>
-  ) => {
-    const orchidsId = element.getAttribute("data-orchids-id");
-    if (!orchidsId) return;
+  const handleStyleChange = useCallback(
+    (element: HTMLElement, styles: Record<string, string>) => {
+      const orchidsId = element.getAttribute("data-orchids-id");
+      if (!orchidsId) return;
 
     const parsed = parseOrchidsId(orchidsId);
     if (!parsed) return;
@@ -727,10 +719,10 @@ export default function HoverReceiver() {
     });
 
     // Don't send to parent yet - wait for blur
-  };
+  }, [updateFocusBox]);
 
   // Send style changes on blur
-  const handleStyleBlur = (element: HTMLElement) => {
+  const handleStyleBlur = useCallback((element: HTMLElement) => {
     if (!hasStyleChangesRef.current) return;
 
     const orchidsId = element.getAttribute("data-orchids-id");
@@ -761,7 +753,7 @@ export default function HoverReceiver() {
 
     // Reset style changes flag
     hasStyleChangesRef.current = false;
-  };
+  }, []);
 
   // Flush image src updates on blur/focus change
   const flushImageSrcChange = () => {
@@ -951,7 +943,7 @@ export default function HoverReceiver() {
 
     window.addEventListener("message", handleMessage);
     return () => window.removeEventListener("message", handleMessage);
-  }, []);
+  }, [handleStyleChange, updateFocusBox]);
 
   // Handle resize
   const handleResizeStart = (e: React.MouseEvent, handle: string) => {
@@ -1191,61 +1183,52 @@ export default function HoverReceiver() {
   }, [isResizing, resizeStart, resizeHandle, focusedElementId, hoverBox]); // Added focusedElementId and hoverBox as dependencies
 
   // Cleanup function to restore element state
-  const cleanupEditingElement = () => {
-    if (editingElementRef.current) {
-      const element = editingElementRef.current;
-
-      // Immediately clear the ref to prevent any further operations
-      editingElementRef.current = null;
-
-      // Flush pending style edits first for the same reason described above
-      handleStyleBlur(element);
-
-      // Now process text changes
-      handleTextChange(element);
-
-      // Restore child elements if they were protected
-      if (element.childElementCount > 0) {
-        restoreChildElements(element);
-      }
-
-      // Only set contentEditable to false if we made it true
-      if (!wasEditableRef.current) {
-        element.contentEditable = "false";
-      }
-
-      // Don't restore original styles - keep the applied styles
-      // Remove the outline suppression styles only
-      const currentStyle = element.getAttribute("style") || "";
-      const cleanedStyle = currentStyle
-        .replace(/outline:\s*none\s*!important;?/gi, "")
-        .replace(/box-shadow:\s*none\s*!important;?/gi, "")
-        .trim()
-        .replace(/;\s*;/g, ";")
-        .replace(/^;|;$/g, "");
-
-      if (cleanedStyle) {
-        element.setAttribute("style", cleanedStyle);
-      } else {
-        element.removeAttribute("style");
-      }
-
-      element.blur();
-
-      // Remove event handlers
-      const handlers = (element as any)._editHandlers;
-      if (handlers) {
-        element.removeEventListener("focus", handlers.focus);
-        element.removeEventListener("blur", handlers.blur);
-        element.removeEventListener("input", handlers.input);
-        delete (element as any)._editHandlers;
-      }
-
-      wasEditableRef.current = false;
-      // Clear the original content reference
-      originalContentRef.current = "";
+  const cleanupEditingElement = useCallback(() => {
+    if (!editingElementRef.current) {
+      return;
     }
-  };
+
+    const element = editingElementRef.current;
+    editingElementRef.current = null;
+
+    handleStyleBlur(element);
+    handleTextChange(element);
+
+    if (element.childElementCount > 0) {
+      restoreChildElements(element);
+    }
+
+    if (!wasEditableRef.current) {
+      element.contentEditable = "false";
+    }
+
+    const currentStyle = element.getAttribute("style") || "";
+    const cleanedStyle = currentStyle
+      .replace(/outline:\s*none\s*!important;?/gi, "")
+      .replace(/box-shadow:\s*none\s*!important;?/gi, "")
+      .trim()
+      .replace(/;\s*;/g, ";")
+      .replace(/^;|;$/g, "");
+
+    if (cleanedStyle) {
+      element.setAttribute("style", cleanedStyle);
+    } else {
+      element.removeAttribute("style");
+    }
+
+    element.blur();
+
+    const handlers = (element as any)._editHandlers;
+    if (handlers) {
+      element.removeEventListener("focus", handlers.focus);
+      element.removeEventListener("blur", handlers.blur);
+      element.removeEventListener("input", handlers.input);
+      delete (element as any)._editHandlers;
+    }
+
+    wasEditableRef.current = false;
+    originalContentRef.current = "";
+  }, [handleStyleBlur, handleTextChange]);
 
   // Prevent all navigation in visual edit mode
   useEffect(() => {
@@ -1288,7 +1271,7 @@ export default function HoverReceiver() {
       // Clear image element reference
       focusedImageElementRef.current = null;
     }
-  }, [isVisualEditMode]);
+  }, [cleanupEditingElement, isVisualEditMode]);
 
   // Update focus box position when scrolling or resizing
   useEffect(() => {
@@ -1329,7 +1312,7 @@ export default function HoverReceiver() {
         resizeObserver.disconnect();
       };
     }
-  }, [focusedElementId]);
+  }, [focusedElementId, updateFocusBox]);
 
   useEffect(() => {
     // Handle pointer movement directly in the iframe
@@ -2005,7 +1988,7 @@ export default function HoverReceiver() {
       window.removeEventListener("scroll", onScroll, true);
       if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
     };
-  }, [focusedElementId, isResizing]); // Added focusedElementId and isResizing as dependencies
+  }, [cleanupEditingElement, focusedElementId, handleStyleBlur, handleTextChange, isResizing, isScrolling]);
 
   return (
     <>

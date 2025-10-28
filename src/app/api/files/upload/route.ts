@@ -4,6 +4,7 @@ import { checkOrigin, jsonError } from '@/lib/server/response';
 import { db } from '@/db';
 import { files } from '@/db/schema';
 import { eq } from 'drizzle-orm';
+import type { InferInsertModel } from 'drizzle-orm';
 
 const ALLOWED_FILE_TYPES = ['txt', 'md', 'docx', 'doc'] as const;
 const MAX_UPLOAD_SIZE = 5 * 1024 * 1024; // 5MB
@@ -142,9 +143,8 @@ export async function POST(request: NextRequest) {
       content = buffer.toString('base64');
     }
 
-    const now = new Date().toISOString();
-
-    const insertData: any = {
+    const timestamp = new Date();
+    const insertData: InferInsertModel<typeof files> = {
       projectId,
       name: rawFile.name,
       type: 'file',
@@ -152,8 +152,8 @@ export async function POST(request: NextRequest) {
       fileType: extension,
       content,
       status: 'new',
-      modifiedAt: now,
-      createdAt: now,
+      modifiedAt: timestamp,
+      createdAt: timestamp,
     };
 
     if (parsedParentId !== null) {

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { tasks } from '@/db/schema';
 import { eq, and, desc } from 'drizzle-orm';
+import type { InferInsertModel } from 'drizzle-orm';
 import { checkOrigin, jsonError } from '@/lib/server/response';
 
 export async function GET(request: NextRequest) {
@@ -156,8 +157,10 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    const body = await request.json();
-    const { title, status } = body;
+    const { title, status } = (await request.json()) as {
+      title?: string;
+      status?: 'pending' | 'in_progress' | 'completed';
+    };
 
     // Check if task exists
     const existingTask = await db.select()
@@ -191,8 +194,8 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    const updates: any = {
-      updatedAt: new Date().toISOString(),
+    const updates: Partial<InferInsertModel<typeof tasks>> = {
+      updatedAt: new Date(),
     };
 
     if (title !== undefined) {
