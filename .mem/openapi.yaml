@@ -1,0 +1,1762 @@
+openapi: 3.0.3
+info:
+  title: Co-Work API
+  description: API documentation for the Co-Work collaborative project management system
+  version: 1.0.0
+  contact:
+    name: Co-Work Team
+
+servers:
+  - url: /api
+    description: API base path
+
+tags:
+  - name: Projects
+    description: Project management operations
+  - name: Project Members
+    description: Project membership management
+  - name: Files
+    description: File and folder management
+  - name: Messages
+    description: AI chat message operations
+  - name: Message Context Files
+    description: Message-file associations
+  - name: Comments
+    description: File comment operations
+  - name: Versions
+    description: File version history
+  - name: Tasks
+    description: AI task management
+
+components:
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Error message
+        code:
+          type: string
+          description: Error code
+      required:
+        - error
+
+    Project:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: Project ID
+        name:
+          type: string
+          description: Project name
+        status:
+          type: string
+          enum: [saved, unsaved]
+          description: Project status
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last update timestamp
+      required:
+        - id
+        - name
+        - status
+        - createdAt
+        - updatedAt
+
+    ProjectMember:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: Member ID
+        projectId:
+          type: integer
+          description: Project ID
+        userId:
+          type: integer
+          description: User ID
+        role:
+          type: string
+          enum: [owner, editor, viewer]
+          description: Member role
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp
+      required:
+        - id
+        - projectId
+        - userId
+        - role
+        - createdAt
+
+    File:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: File ID
+        projectId:
+          type: integer
+          description: Project ID
+        parentId:
+          type: integer
+          nullable: true
+          description: Parent folder ID
+        name:
+          type: string
+          description: File or folder name
+        type:
+          type: string
+          enum: [file, folder]
+          description: Resource type
+        fileType:
+          type: string
+          enum: [docx, md, txt, code, image]
+          nullable: true
+          description: File type
+        content:
+          type: string
+          nullable: true
+          description: File content
+        ownerType:
+          type: string
+          enum: [team, private]
+          description: Owner type
+        ownerId:
+          type: integer
+          nullable: true
+          description: Owner user ID
+        status:
+          type: string
+          enum: [modified, new, synced]
+          description: File status
+        modifiedAt:
+          type: string
+          format: date-time
+          description: Last modification timestamp
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp
+      required:
+        - id
+        - projectId
+        - name
+        - type
+        - ownerType
+        - status
+        - modifiedAt
+        - createdAt
+
+    Message:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: Message ID
+        projectId:
+          type: integer
+          description: Project ID
+        role:
+          type: string
+          enum: [user, assistant]
+          description: Message sender role
+        content:
+          type: string
+          description: Message content
+        quotedMessageId:
+          type: integer
+          nullable: true
+          description: Quoted message ID
+        pinned:
+          type: boolean
+          description: Pinned status
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp
+      required:
+        - id
+        - projectId
+        - role
+        - content
+        - pinned
+        - createdAt
+
+    MessageContextFile:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: Context file association ID
+        messageId:
+          type: integer
+          description: Message ID
+        fileId:
+          type: integer
+          description: File ID
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp
+      required:
+        - id
+        - messageId
+        - fileId
+        - createdAt
+
+    Comment:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: Comment ID
+        fileId:
+          type: integer
+          description: File ID
+        parentCommentId:
+          type: integer
+          nullable: true
+          description: Parent comment ID for nested comments
+        author:
+          type: string
+          description: Comment author
+        content:
+          type: string
+          description: Comment content
+        resolved:
+          type: boolean
+          description: Resolution status
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp
+      required:
+        - id
+        - fileId
+        - author
+        - content
+        - resolved
+        - createdAt
+
+    Version:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: Version ID
+        fileId:
+          type: integer
+          description: File ID
+        title:
+          type: string
+          description: Version title
+        author:
+          type: string
+          description: Version author
+        content:
+          type: string
+          description: Version content
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp
+      required:
+        - id
+        - fileId
+        - title
+        - author
+        - content
+        - createdAt
+
+    Task:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: Task ID
+        fileId:
+          type: integer
+          description: File ID
+        title:
+          type: string
+          description: Task title
+        status:
+          type: string
+          enum: [pending, in_progress, completed]
+          description: Task status
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last update timestamp
+      required:
+        - id
+        - fileId
+        - title
+        - status
+        - createdAt
+        - updatedAt
+
+paths:
+  /projects:
+    get:
+      tags:
+        - Projects
+      summary: List projects
+      description: Retrieve a list of projects with optional search and pagination
+      parameters:
+        - name: id
+          in: query
+          description: Project ID for single project retrieval
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          description: Maximum number of results (max 100)
+          schema:
+            type: integer
+            default: 10
+            maximum: 100
+        - name: offset
+          in: query
+          description: Number of items to skip
+          schema:
+            type: integer
+            default: 0
+        - name: search
+          in: query
+          description: Search term for project name
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/Project'
+                  - type: array
+                    items:
+                      $ref: '#/components/schemas/Project'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Project not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    post:
+      tags:
+        - Projects
+      summary: Create a project
+      description: Create a new project
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+              properties:
+                name:
+                  type: string
+                  description: Project name
+                status:
+                  type: string
+                  enum: [saved, unsaved]
+                  description: Project status
+      responses:
+        '201':
+          description: Project created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    put:
+      tags:
+        - Projects
+      summary: Update a project
+      description: Update an existing project
+      parameters:
+        - name: id
+          in: query
+          required: true
+          description: Project ID
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: Project name
+                status:
+                  type: string
+                  enum: [saved, unsaved]
+                  description: Project status
+      responses:
+        '200':
+          description: Project updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Project not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    delete:
+      tags:
+        - Projects
+      summary: Delete a project
+      description: Delete an existing project
+      parameters:
+        - name: id
+          in: query
+          required: true
+          description: Project ID
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Project deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  project:
+                    $ref: '#/components/schemas/Project'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Project not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /project-members:
+    get:
+      tags:
+        - Project Members
+      summary: List project members
+      description: Retrieve project members by ID or project
+      parameters:
+        - name: id
+          in: query
+          description: Member ID for single member retrieval
+          schema:
+            type: integer
+        - name: projectId
+          in: query
+          description: Project ID (required for listing members)
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ProjectMember'
+                  - type: array
+                    items:
+                      $ref: '#/components/schemas/ProjectMember'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Member not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    post:
+      tags:
+        - Project Members
+      summary: Add project member
+      description: Add a new member to a project
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - projectId
+                - userId
+              properties:
+                projectId:
+                  type: integer
+                  description: Project ID
+                userId:
+                  type: integer
+                  description: User ID
+                role:
+                  type: string
+                  enum: [owner, editor, viewer]
+                  default: viewer
+                  description: Member role
+      responses:
+        '201':
+          description: Member added successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectMember'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    delete:
+      tags:
+        - Project Members
+      summary: Remove project member
+      description: Remove a member from a project
+      parameters:
+        - name: id
+          in: query
+          required: true
+          description: Member ID
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Member removed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  member:
+                    $ref: '#/components/schemas/ProjectMember'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Member not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /files:
+    get:
+      tags:
+        - Files
+      summary: List files
+      description: Retrieve files and folders with filtering options
+      parameters:
+        - name: id
+          in: query
+          description: File ID for single file retrieval
+          schema:
+            type: integer
+        - name: projectId
+          in: query
+          description: Project ID (required for listing files)
+          schema:
+            type: integer
+        - name: ownerType
+          in: query
+          description: Filter by owner type
+          schema:
+            type: string
+            enum: [team, private]
+        - name: userId
+          in: query
+          description: Filter by owner user ID
+          schema:
+            type: integer
+        - name: parentId
+          in: query
+          description: Filter by parent folder ID (use 'null' or empty for root)
+          schema:
+            type: string
+        - name: limit
+          in: query
+          description: Maximum number of results (max 100)
+          schema:
+            type: integer
+            default: 100
+            maximum: 100
+        - name: offset
+          in: query
+          description: Number of items to skip
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/File'
+                  - type: array
+                    items:
+                      $ref: '#/components/schemas/File'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: File not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    post:
+      tags:
+        - Files
+      summary: Create file or folder
+      description: Create a new file or folder
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - projectId
+                - name
+                - type
+                - ownerType
+              properties:
+                projectId:
+                  type: integer
+                  description: Project ID
+                name:
+                  type: string
+                  description: File or folder name
+                type:
+                  type: string
+                  enum: [file, folder]
+                  description: Resource type
+                ownerType:
+                  type: string
+                  enum: [team, private]
+                  description: Owner type
+                parentId:
+                  type: integer
+                  nullable: true
+                  description: Parent folder ID
+                fileType:
+                  type: string
+                  enum: [docx, md, txt, code, image]
+                  description: File type
+                content:
+                  type: string
+                  description: File content
+                ownerId:
+                  type: integer
+                  description: Owner user ID
+                status:
+                  type: string
+                  enum: [modified, new, synced]
+                  description: File status
+      responses:
+        '201':
+          description: File created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/File'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    put:
+      tags:
+        - Files
+      summary: Update file
+      description: Update an existing file or folder
+      parameters:
+        - name: id
+          in: query
+          required: true
+          description: File ID
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: File or folder name
+                content:
+                  type: string
+                  description: File content
+                status:
+                  type: string
+                  enum: [modified, new, synced]
+                  description: File status
+                parentId:
+                  type: integer
+                  nullable: true
+                  description: Parent folder ID
+                fileType:
+                  type: string
+                  enum: [docx, md, txt, code, image]
+                  description: File type
+      responses:
+        '200':
+          description: File updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/File'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: File not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    delete:
+      tags:
+        - Files
+      summary: Delete file
+      description: Delete an existing file or folder
+      parameters:
+        - name: id
+          in: query
+          required: true
+          description: File ID
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: File deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  file:
+                    $ref: '#/components/schemas/File'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: File not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /messages:
+    get:
+      tags:
+        - Messages
+      summary: List messages
+      description: Retrieve messages for a project
+      parameters:
+        - name: id
+          in: query
+          description: Message ID for single message retrieval
+          schema:
+            type: integer
+        - name: projectId
+          in: query
+          description: Project ID (required for listing messages)
+          schema:
+            type: integer
+        - name: pinned
+          in: query
+          description: Filter by pinned status
+          schema:
+            type: boolean
+        - name: limit
+          in: query
+          description: Maximum number of results (max 100)
+          schema:
+            type: integer
+            default: 50
+            maximum: 100
+        - name: offset
+          in: query
+          description: Number of items to skip
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/Message'
+                  - type: array
+                    items:
+                      $ref: '#/components/schemas/Message'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Message not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    post:
+      tags:
+        - Messages
+      summary: Create message
+      description: Create a new chat message
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - projectId
+                - role
+                - content
+              properties:
+                projectId:
+                  type: integer
+                  description: Project ID
+                role:
+                  type: string
+                  enum: [user, assistant]
+                  description: Message sender role
+                content:
+                  type: string
+                  description: Message content
+                quotedMessageId:
+                  type: integer
+                  nullable: true
+                  description: Quoted message ID
+      responses:
+        '201':
+          description: Message created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    put:
+      tags:
+        - Messages
+      summary: Update message
+      description: Update an existing message
+      parameters:
+        - name: id
+          in: query
+          required: true
+          description: Message ID
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                pinned:
+                  type: boolean
+                  description: Pinned status
+                content:
+                  type: string
+                  description: Message content
+      responses:
+        '200':
+          description: Message updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Message not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    delete:
+      tags:
+        - Messages
+      summary: Delete message
+      description: Delete an existing message
+      parameters:
+        - name: id
+          in: query
+          required: true
+          description: Message ID
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Message deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  deleted:
+                    $ref: '#/components/schemas/Message'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Message not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /message-context-files:
+    get:
+      tags:
+        - Message Context Files
+      summary: List message context files
+      description: Retrieve file associations for a message
+      parameters:
+        - name: id
+          in: query
+          description: Context file association ID
+          schema:
+            type: integer
+        - name: messageId
+          in: query
+          description: Message ID to retrieve context files
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/MessageContextFile'
+                  - type: array
+                    items:
+                      $ref: '#/components/schemas/MessageContextFile'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Context file not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    post:
+      tags:
+        - Message Context Files
+      summary: Add message context file
+      description: Associate a file with a message
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - messageId
+                - fileId
+              properties:
+                messageId:
+                  type: integer
+                  description: Message ID
+                fileId:
+                  type: integer
+                  description: File ID
+      responses:
+        '201':
+          description: Context file added successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageContextFile'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    delete:
+      tags:
+        - Message Context Files
+      summary: Remove message context file
+      description: Remove file association from a message
+      parameters:
+        - name: id
+          in: query
+          required: true
+          description: Context file association ID
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Context file removed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  deletedRecord:
+                    $ref: '#/components/schemas/MessageContextFile'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Context file not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /comments:
+    get:
+      tags:
+        - Comments
+      summary: List comments
+      description: Retrieve comments for a file
+      parameters:
+        - name: id
+          in: query
+          description: Comment ID for single comment retrieval
+          schema:
+            type: integer
+        - name: fileId
+          in: query
+          description: File ID (required for listing comments)
+          schema:
+            type: integer
+        - name: resolved
+          in: query
+          description: Filter by resolved status
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/Comment'
+                  - type: array
+                    items:
+                      $ref: '#/components/schemas/Comment'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Comment not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    post:
+      tags:
+        - Comments
+      summary: Create comment
+      description: Create a new comment on a file
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - fileId
+                - author
+                - content
+              properties:
+                fileId:
+                  type: integer
+                  description: File ID
+                author:
+                  type: string
+                  description: Comment author
+                content:
+                  type: string
+                  description: Comment content
+                parentCommentId:
+                  type: integer
+                  nullable: true
+                  description: Parent comment ID for nested comments
+      responses:
+        '201':
+          description: Comment created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Comment'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    put:
+      tags:
+        - Comments
+      summary: Update comment
+      description: Update an existing comment
+      parameters:
+        - name: id
+          in: query
+          required: true
+          description: Comment ID
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                resolved:
+                  type: boolean
+                  description: Resolution status
+                content:
+                  type: string
+                  description: Comment content
+      responses:
+        '200':
+          description: Comment updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Comment'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Comment not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    delete:
+      tags:
+        - Comments
+      summary: Delete comment
+      description: Delete an existing comment
+      parameters:
+        - name: id
+          in: query
+          required: true
+          description: Comment ID
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Comment deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  comment:
+                    $ref: '#/components/schemas/Comment'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Comment not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /versions:
+    get:
+      tags:
+        - Versions
+      summary: List file versions
+      description: Retrieve version history for a file
+      parameters:
+        - name: id
+          in: query
+          description: Version ID for single version retrieval
+          schema:
+            type: integer
+        - name: fileId
+          in: query
+          description: File ID (required for listing versions)
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/Version'
+                  - type: array
+                    items:
+                      $ref: '#/components/schemas/Version'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Version not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    post:
+      tags:
+        - Versions
+      summary: Create file version
+      description: Create a new version of a file
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - fileId
+                - title
+                - author
+                - content
+              properties:
+                fileId:
+                  type: integer
+                  description: File ID
+                title:
+                  type: string
+                  description: Version title
+                author:
+                  type: string
+                  description: Version author
+                content:
+                  type: string
+                  description: Version content
+      responses:
+        '201':
+          description: Version created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Version'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    delete:
+      tags:
+        - Versions
+      summary: Delete file version
+      description: Delete a version from history
+      parameters:
+        - name: id
+          in: query
+          required: true
+          description: Version ID
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Version deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  version:
+                    $ref: '#/components/schemas/Version'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Version not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /tasks:
+    get:
+      tags:
+        - Tasks
+      summary: List tasks
+      description: Retrieve tasks for a file
+      parameters:
+        - name: id
+          in: query
+          description: Task ID for single task retrieval
+          schema:
+            type: integer
+        - name: fileId
+          in: query
+          description: File ID (required for listing tasks)
+          schema:
+            type: integer
+        - name: status
+          in: query
+          description: Filter by task status
+          schema:
+            type: string
+            enum: [pending, in_progress, completed]
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/Task'
+                  - type: array
+                    items:
+                      $ref: '#/components/schemas/Task'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Task not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    post:
+      tags:
+        - Tasks
+      summary: Create task
+      description: Create a new task for a file
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - fileId
+                - title
+              properties:
+                fileId:
+                  type: integer
+                  description: File ID
+                title:
+                  type: string
+                  description: Task title
+                status:
+                  type: string
+                  enum: [pending, in_progress, completed]
+                  default: pending
+                  description: Task status
+      responses:
+        '201':
+          description: Task created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    put:
+      tags:
+        - Tasks
+      summary: Update task
+      description: Update an existing task
+      parameters:
+        - name: id
+          in: query
+          required: true
+          description: Task ID
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                  description: Task title
+                status:
+                  type: string
+                  enum: [pending, in_progress, completed]
+                  description: Task status
+      responses:
+        '200':
+          description: Task updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Task not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    delete:
+      tags:
+        - Tasks
+      summary: Delete task
+      description: Delete an existing task
+      parameters:
+        - name: id
+          in: query
+          required: true
+          description: Task ID
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Task deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  task:
+                    $ref: '#/components/schemas/Task'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Task not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
